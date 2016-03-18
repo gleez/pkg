@@ -1,10 +1,10 @@
 
-# Mantra log interface + the matching facade for the Go stdlib `log.Logger`
+# Mantra log interface + the matching facade for the Go stdlib `log`
 
 The `mantra/log` library (package `log`) provides an interface for leveled logging so
 that any custom logger can be used in exactly the same manner within all parts of an application.
 The library further provides a default implementation of the interface based on the Go stdlib
-`log.Logger` via a reusable facade.
+`log` via a reusable facade.
 
 The library can be installed by one of the following methods:
 
@@ -22,8 +22,8 @@ The library can be installed by one of the following methods:
 
 ## Usage
 
-The package defines the `Log` interface, the `Level` type and the `GoLog` facade for the Go stdlib
-`log.Log`, which is used by default.
+The package defines the `Log` interface, the `Level` type, facade for the Go stdlib
+`log`, which is used by default.
 
 	import "github.com/gleez/mantra/log
 
