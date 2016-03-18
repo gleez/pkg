@@ -12,18 +12,16 @@ import (
 	"fmt"
 	stdlog "log"
 	"os"
-	"os/signal"
 	"path"
 	"runtime"
 	"sync"
-	"syscall"
 	"time"
 )
 
 var defaultTimeFormat = time.RFC3339 // 2006-01-02T15:04:05Z07:00
 var format = "[%s] %s [%s:%d] %s\n"  // level application [file:line]: message newline
 
-var log = New(stdlog.New(os.Stderr, "", stdlog.Ldate|stdlog.Ltime), INFO, "", false)
+var log = New(stdlog.New(os.Stderr, "", stdlog.Ldate|stdlog.Ltime), INFO, "")
 
 // Log provides a struct with fields that describe the details of log.
 type Log struct {
@@ -37,28 +35,12 @@ type Log struct {
 }
 
 // NewLog constructs a new instance of Log.
-func New(logger *stdlog.Logger, level Level, name string, osSignal bool) *Log {
-	glog := &Log{
+func New(logger *stdlog.Logger, level Level, name string) *Log {
+	return &Log{
 		logger: logger,
 		level:  level,
 		name:   name,
-		signal: osSignal,
 	}
-
-	if glog.signal {
-		// Setup signal handler
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan,
-			os.Interrupt,
-			syscall.SIGHUP,
-			syscall.SIGINT,
-			syscall.SIGTERM,
-			syscall.SIGQUIT)
-
-		go glog.SignalProcessor(sigChan)
-	}
-
-	return glog
 }
 
 // SetLevel sets the logging level of the logger. Messages with the level lower than currently set
@@ -68,6 +50,37 @@ func (l *Log) SetLevel(lvl Level) {
 	defer l.mu.Unlock()
 
 	l.level = lvl
+}
+
+// Set File creates or appends to the file path passed
+func (gl *Log) SetFile(filePath string) error {
+	var err error
+
+	if gl.file == nil {
+		// use specified log file
+		gl.file, err = os.OpenFile(filePath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
+		if err != nil {
+			return fmt.Errorf("Failed to create %s: %v\n", filePath, err)
+		}
+
+		// assign it to the standard logger
+		stdlog.SetOutput(gl.file)
+
+		gl.path = filePath
+		gl.Trace("Opened log file")
+	}
+
+	return nil
+}
+
+// Close Log File closes the current logfile
+func (gl *Log) CloseFile() error {
+	if gl.file != nil {
+		gl.Trace("Closing log file")
+		return gl.file.Close()
+	}
+
+	return nil
 }
 
 func (gl *Log) log(msg string, level Level, args ...interface{}) {
@@ -154,66 +167,6 @@ func (gl *Log) StdLog() *stdlog.Logger {
 	return gl.logger
 }
 
-// Set File creates or appends to the file path passed
-func (gl *Log) SetFile(filePath string) error {
-	var err error
-
-	if gl.file == nil {
-		// use specified log file
-		gl.file, err = os.OpenFile(filePath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
-		if err != nil {
-			return fmt.Errorf("Failed to create %s: %v\n", filePath, err)
-		}
-
-		// assign it to the standard logger
-		stdlog.SetOutput(gl.file)
-
-		gl.path = filePath
-		gl.Trace("Opened log file")
-	}
-
-	return nil
-}
-
-// Close Log File closes the current logfile
-func (gl *Log) CloseFile() error {
-	if gl.file != nil {
-		gl.Trace("Closing log file")
-		return gl.file.Close()
-	}
-
-	return nil
-}
-
-// SignalProcessor is a goroutine that handles OS signals
-func (gl *Log) SignalProcessor(c <-chan os.Signal) {
-	for {
-		sig := <-c
-		fmt.Println("Got signal:", sig)
-		switch sig {
-		case syscall.SIGHUP:
-			// Rotate logs if configured
-			if gl.file != nil {
-				gl.Info("Recieved SIGHUP, cycling logfile")
-				gl.CloseFile()
-				gl.SetFile(gl.path)
-			} else {
-				gl.Info("Ignoring SIGHUP, logfile not configured")
-			}
-		case syscall.SIGTERM:
-		case syscall.SIGQUIT:
-		case syscall.SIGINT:
-			// Initiate shutdown
-			gl.Info("Received signal, shutting down in 15 seconds")
-			go func() {
-				time.Sleep(15 * time.Second)
-				gl.Info("Clean shutdown timed out, forcing exit")
-				os.Exit(0)
-			}()
-		}
-	}
-}
-
 // Trace logs a formatted message with the TRACE level.
 func Trace(message string, args ...interface{}) {
 	log.Trace(message, args...)
@@ -259,6 +212,21 @@ func Fatal(message string, args ...interface{}) {
 	log.Fatal(message, args...)
 }
 
+//SetLevel sets the level of default Logger
+func SetLevel(lvl Level) {
+	log.SetLevel(lvl)
+}
+
+// Set File creates or appends to the file path passed
+func SetFile(filePath string) error {
+	return log.SetFile(filePath)
+}
+
+// Close Log File closes the current logfile
+func CloseFile() error {
+	return log.CloseFile()
+}
+
 func line(calldepth int) string {
 	_, file, line, ok := runtime.Caller(calldepth)
 	if !ok {
@@ -267,14 +235,4 @@ func line(calldepth int) string {
 	}
 
 	return fmt.Sprintf("%s:%d", path.Base(file), line)
-}
-
-//SetLevel sets the level of default Logger
-func SetLevel(lvl Level) {
-	log.SetLevel(lvl)
-}
-
-// GetLogger retrieves a log instance.
-func GetLogger() *Log {
-	return log
 }
