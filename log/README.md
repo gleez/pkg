@@ -40,6 +40,4 @@ Distributed under a MIT style license found in the [LICENSE][license] file.
 [docs]: https://godoc.org/github.com/gleez/mantra/log
 [license]: https://github.com/gleez/mantra/blob/master/LICENSE
 
-Credits
-https://github.com/ventu-io/go-log-interface
 
