@@ -10,7 +10,7 @@ package log
 
 import (
 	"fmt"
-	stdlog "log"
+	"io"
 	"os"
 	"path"
 	"runtime"
@@ -19,33 +19,40 @@ import (
 )
 
 var defaultTimeFormat = time.RFC3339 // 2006-01-02T15:04:05Z07:00
-var format = "[%s] %s [%s:%d] %s\n"  // level application [file:line]: message newline
 
-var log = New(stdlog.New(os.Stderr, "", stdlog.Ldate|stdlog.Ltime), INFO, "")
+var log = New(os.Stdout, INFO)
 
-// Log provides a struct with fields that describe the details of log.
-type Log struct {
-	logger *stdlog.Logger
+// Logger provides a struct with fields that describe the details of log.
+type Logger struct {
+	mu     sync.Mutex // ensures atomic writes; protects the following fields
+	prefix string     // prefix to write at beginning of each line
+	out    io.Writer  // destination for output
 	level  Level
-	name   string
-	path   string
 	file   *os.File
-	signal bool
-	mu     sync.Mutex
 }
 
-// NewLog constructs a new instance of Log.
-func New(logger *stdlog.Logger, level Level, name string) *Log {
-	return &Log{
-		logger: logger,
-		level:  level,
-		name:   name,
-	}
+// Constructs a new instance of Log.
+func New(out io.Writer, lvl Level) *Logger {
+	return &Logger{out: out, level: lvl}
+}
+
+// Prefix returns the output prefix for the logger.
+func (l *Logger) Prefix() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.prefix
+}
+
+// SetPrefix sets the output prefix for the logger.
+func (l *Logger) SetPrefix(prefix string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.prefix = prefix
 }
 
 // SetLevel sets the logging level of the logger. Messages with the level lower than currently set
 // are ignored. Messages with the level FATAL or PANIC are never ignored.
-func (l *Log) SetLevel(lvl Level) {
+func (l *Logger) SetLevel(lvl Level) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -53,38 +60,77 @@ func (l *Log) SetLevel(lvl Level) {
 }
 
 // Set File creates or appends to the file path passed
-func (gl *Log) SetFile(filePath string) error {
-	var err error
+func (l *Logger) SetFile(filePath string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
-	if gl.file == nil {
+	if l.file == nil {
 		// use specified log file
-		gl.file, err = os.OpenFile(filePath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
+		file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
 		if err != nil {
 			return fmt.Errorf("Failed to create %s: %v\n", filePath, err)
 		}
 
 		// assign it to the standard logger
-		stdlog.SetOutput(gl.file)
+		l.out = file
+		l.file = file
 
-		gl.path = filePath
-		gl.Trace("Opened log file")
+		Debug("Opened log file")
 	}
 
 	return nil
 }
 
 // Close Log File closes the current logfile
-func (gl *Log) CloseFile() error {
-	if gl.file != nil {
-		gl.Trace("Closing log file")
-		return gl.file.Close()
+func (l *Logger) CloseFile() error {
+	if l.file != nil {
+		Debug("Closing log file")
+		return l.file.Close()
 	}
 
 	return nil
 }
 
-func (gl *Log) log(msg string, level Level, args ...interface{}) {
-	if level < gl.level && level < PANIC {
+// Format formats the logs as "time [level] line message"
+func (l *Logger) format(r *Record) (b []byte, err error) {
+	s := fmt.Sprintf(colors[r.Lvl]+"%s [%s] %s", r.Time.Format(defaultTimeFormat), levels[r.Lvl], "\033[0m")
+
+	// Show file name and line in debug and trace
+	if l.level < INFO {
+		if len(r.Line) != 0 {
+			s = s + "[" + r.Line + "] "
+		}
+	}
+
+	if len(r.Msg) != 0 {
+		s = s + r.Msg
+	}
+
+	b = []byte(s)
+
+	if len(b) == 0 || b[len(b)-1] != '\n' {
+		b = append(b, '\n')
+	}
+
+	return b, nil
+}
+
+func (l *Logger) output(record *Record) error {
+	b, err := l.format(record)
+	if err != nil {
+		return err
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	_, err = l.out.Write(b)
+
+	return err
+}
+
+func (l *Logger) log(msg string, lvl Level, args ...interface{}) {
+	if lvl < l.level && lvl < PANIC {
 		return
 	}
 
@@ -93,15 +139,10 @@ func (gl *Log) log(msg string, level Level, args ...interface{}) {
 		m = fmt.Sprintf(m, args...)
 	}
 
-	// Show file name and line in debug and trace
-	if gl.level < INFO {
-		m = fmt.Sprintf("[%s] %s", line(2), m)
-	}
+	record := NewRecord(time.Now(), m, line(4), lvl)
+	l.output(record)
 
-	m = fmt.Sprintf(colors[level]+"[%s] %s %s\n", levels[level], gl.name, "\033[0m"+m)
-	gl.logger.Output(2, m)
-
-	switch level {
+	switch lvl {
 	case PANIC:
 		panic(m)
 	case FATAL:
@@ -113,58 +154,53 @@ func (gl *Log) log(msg string, level Level, args ...interface{}) {
 
 // Log logs a formatted message with a given level. If level is below the one currently set
 // the message will be ignored.
-func (self *Log) Log(message string, lvl Level, args ...interface{}) {
-	self.log(message, lvl, args...)
+func (l *Logger) Log(message string, lvl Level, args ...interface{}) {
+	l.log(message, lvl, args...)
 }
 
 // Trace logs a formatted message with the TRACE level.
-func (self *Log) Trace(message string, args ...interface{}) {
-	self.log(message, TRACE, args...)
+func (l *Logger) Trace(message string, args ...interface{}) {
+	l.log(message, TRACE, args...)
 }
 
 // Debug logs a formatted message with the DEBUG level.
-func (self *Log) Debug(message string, args ...interface{}) {
-	self.log(message, DEBUG, args...)
+func (l *Logger) Debug(message string, args ...interface{}) {
+	l.log(message, DEBUG, args...)
 }
 
 // Info logs a formatted message with the INFO level.
-func (self *Log) Info(message string, args ...interface{}) {
-	self.log(message, INFO, args...)
+func (l *Logger) Info(message string, args ...interface{}) {
+	l.log(message, INFO, args...)
 }
 
 // Notice logs a formatted message with the NOTICE level.
-func (self *Log) Notice(message string, args ...interface{}) {
-	self.log(message, NOTICE, args...)
+func (l *Logger) Notice(message string, args ...interface{}) {
+	l.log(message, NOTICE, args...)
 }
 
 // Warn logs a formatted message with the WARN level.
-func (self *Log) Warn(message string, args ...interface{}) {
-	self.log(message, WARN, args...)
+func (l *Logger) Warn(message string, args ...interface{}) {
+	l.log(message, WARN, args...)
 }
 
 // Error logs a formatted message with the ERROR level.
-func (self *Log) Error(message string, args ...interface{}) {
-	self.log(message, ERROR, args...)
+func (l *Logger) Error(message string, args ...interface{}) {
+	l.log(message, ERROR, args...)
 }
 
 // Panic logs a formatted message with the PANIC level and calls panic.
-func (self *Log) Panic(message string, args ...interface{}) {
-	self.log(message, PANIC, args...)
+func (l *Logger) Panic(message string, args ...interface{}) {
+	l.log(message, PANIC, args...)
 }
 
 // Alert logs a formatted message with the ALERT level.
-func (self *Log) Alert(message string, args ...interface{}) {
-	self.log(message, ALERT, args...)
+func (l *Logger) Alert(message string, args ...interface{}) {
+	l.log(message, ALERT, args...)
 }
 
 // Fatal logs a formatted message with the FATAL level and exits the application with an error.
-func (self *Log) Fatal(message string, args ...interface{}) {
-	self.log(message, FATAL, args...)
-}
-
-// StdLog returns the underlying stdlib logger.
-func (gl *Log) StdLog() *stdlog.Logger {
-	return gl.logger
+func (l *Logger) Fatal(message string, args ...interface{}) {
+	l.log(message, FATAL, args...)
 }
 
 // Trace logs a formatted message with the TRACE level.
@@ -215,6 +251,16 @@ func Fatal(message string, args ...interface{}) {
 //SetLevel sets the level of default Logger
 func SetLevel(lvl Level) {
 	log.SetLevel(lvl)
+}
+
+// Prefix returns the output prefix for the standard logger.
+func Prefix() string {
+	return log.Prefix()
+}
+
+// SetPrefix sets the output prefix for the standard logger.
+func SetPrefix(prefix string) {
+	log.SetPrefix(prefix)
 }
 
 // Set File creates or appends to the file path passed
