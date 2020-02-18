@@ -1,284 +1,189 @@
-/*
-	Copyright (c) 2016 Gleez Technologies, Sandeep Sangamreddi, contributors
-	The use of this source code is governed by a MIT style license found in the LICENSE file
-
-	Package log provides a generic interface for leveled logging and a default implementation
-	of the interface as a facade to Go stdlib log.Logger.
-*/
-
+// Package log provides a global logger for zerolog.
 package log
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"path"
-	"runtime"
-	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/pkgerrors"
 )
 
-var defaultTimeFormat = time.RFC3339 // 2006-01-02T15:04:05Z07:00
+// Logger is the global logger.
+var Logger = zerolog.New(os.Stderr).With().Timestamp().Logger()
 
-var log = New(os.Stdout, INFO)
-
-// Logger provides a struct with fields that describe the details of log.
-type Logger struct {
-	mu     sync.Mutex // ensures atomic writes; protects the following fields
-	prefix string     // prefix to write at beginning of each line
-	out    io.Writer  // destination for output
-	level  Level
-	file   *os.File
-}
-
-// Constructs a new instance of Log.
-func New(out io.Writer, lvl Level) *Logger {
-	return &Logger{out: out, level: lvl}
-}
-
-// Prefix returns the output prefix for the logger.
-func (l *Logger) Prefix() string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.prefix
-}
-
-// SetPrefix sets the output prefix for the logger.
-func (l *Logger) SetPrefix(prefix string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.prefix = prefix
-}
-
-// SetLevel sets the logging level of the logger. Messages with the level lower than currently set
-// are ignored. Messages with the level FATAL or PANIC are never ignored.
-func (l *Logger) SetLevel(lvl Level) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	l.level = lvl
-}
-
-// Set File creates or appends to the file path passed
-func (l *Logger) SetFile(filePath string) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if l.file == nil {
-		// use specified log file
-		file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
+//InitLog initializes global logging settings
+// level - debug, info, warn, error, fatal, panic, none
+func SetupLogging(level string, isConsole, isCaller bool) {
+	//set log level
+	if level == "none" || level == "disabled" {
+		zerolog.SetGlobalLevel(zerolog.Disabled)
+	} else {
+		lvl, err := zerolog.ParseLevel(level)
 		if err != nil {
-			return fmt.Errorf("Failed to create %s: %v\n", filePath, err)
+			fmt.Printf("invalid log level: %s\n", err)
+			panic("log initialization failed")
 		}
-
-		// assign it to the standard logger
-		l.out = file
-		l.file = file
-
-		Debug("Opened log file")
+		zerolog.SetGlobalLevel(lvl)
 	}
 
-	return nil
+	//set log format
+	zerolog.TimeFieldFormat = time.RFC3339
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
+	zerolog.DurationFieldUnit = time.Millisecond
+	zerolog.DurationFieldInteger = true
+
+	//create logger
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	if isConsole {
+		logger = logger.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+	}
+
+	if isCaller {
+		logger = logger.With().Caller().Logger()
+	}
+
+	Logger = logger
 }
 
-// Close Log File closes the current logfile
-func (l *Logger) CloseFile() error {
-	if l.file != nil {
-		Debug("Closing log file")
-		return l.file.Close()
+// Service logs using info - source, msg, error, params
+func Service(ctx context.Context, source, msg string, err error, params map[string]interface{}) {
+
+	if params == nil {
+		params = make(map[string]interface{})
 	}
 
-	return nil
-}
+	params["svc"] = source
 
-// Format formats the logs as "time [level] line message"
-func (l *Logger) format(r *Record) (b []byte, err error) {
-	s := fmt.Sprintf(colors[r.Lvl]+"%s [%s] %s", r.Time.Format(defaultTimeFormat), levels[r.Lvl], "\033[0m")
-
-	// Show file name and line in debug and trace
-	if l.level < INFO {
-		if len(r.Line) != 0 {
-			s = s + "[" + r.Line + "] "
-		}
+	if source == "account" {
+		params["svc"] = "user"
 	}
 
-	if len(r.Msg) != 0 {
-		s = s + r.Msg
+	if val, ok := params["took"].(time.Duration); ok {
+		params["duration"] = val
+		params["latency"] = val.String()
+
+		//remove took
+		delete(params, "took")
 	}
 
-	b = []byte(s)
+	// 	if user, ok := ctx.Value("_authuser").(*models.AuthUser); ok {
+	// 		params["id"] = user.ID
+	// 		params["username"] = user.Username
+	// 		params["tenant_id"] = user.TenantID
+	// 	}
 
-	if len(b) == 0 || b[len(b)-1] != '\n' {
-		b = append(b, '\n')
-	}
-
-	return b, nil
-}
-
-func (l *Logger) output(record *Record) error {
-	b, err := l.format(record)
 	if err != nil {
-		return err
-	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	_, err = l.out.Write(b)
-
-	return err
-}
-
-func (l *Logger) log(msg string, lvl Level, args ...interface{}) {
-	if lvl < l.level && lvl < PANIC {
+		params["error"] = err
+		Error().Fields(params).Msg(msg)
 		return
 	}
 
-	m := msg
-	if len(args) > 0 {
-		m = fmt.Sprintf(m, args...)
-	}
+	Info().Fields(params).Msg(msg)
 
-	record := NewRecord(time.Now(), m, line(4), lvl)
-	l.output(record)
-
-	switch lvl {
-	case PANIC:
-		panic(m)
-	case FATAL:
-		os.Exit(1)
-	default:
-		// ignore
-	}
 }
 
-// Log logs a formatted message with a given level. If level is below the one currently set
-// the message will be ignored.
-func (l *Logger) Log(message string, lvl Level, args ...interface{}) {
-	l.log(message, lvl, args...)
+// Output duplicates the global logger and sets w as its output.
+func Output(w io.Writer) zerolog.Logger {
+	return Logger.Output(w)
 }
 
-// Trace logs a formatted message with the TRACE level.
-func (l *Logger) Trace(message string, args ...interface{}) {
-	l.log(message, TRACE, args...)
+// With creates a child logger with the field added to its context.
+func With() zerolog.Context {
+	return Logger.With()
 }
 
-// Debug logs a formatted message with the DEBUG level.
-func (l *Logger) Debug(message string, args ...interface{}) {
-	l.log(message, DEBUG, args...)
+// Level creates a child logger with the minimum accepted level set to level.
+func Level(level zerolog.Level) zerolog.Logger {
+	return Logger.Level(level)
 }
 
-// Info logs a formatted message with the INFO level.
-func (l *Logger) Info(message string, args ...interface{}) {
-	l.log(message, INFO, args...)
+// Sample returns a logger with the s sampler.
+func Sample(s zerolog.Sampler) zerolog.Logger {
+	return Logger.Sample(s)
 }
 
-// Notice logs a formatted message with the NOTICE level.
-func (l *Logger) Notice(message string, args ...interface{}) {
-	l.log(message, NOTICE, args...)
+// Hook returns a logger with the h Hook.
+func Hook(h zerolog.Hook) zerolog.Logger {
+	return Logger.Hook(h)
 }
 
-// Warn logs a formatted message with the WARN level.
-func (l *Logger) Warn(message string, args ...interface{}) {
-	l.log(message, WARN, args...)
+// Debug starts a new message with debug level.
+//
+// You must call Msg on the returned event in order to send the event.
+func Debug() *zerolog.Event {
+	return Logger.Debug()
 }
 
-// Error logs a formatted message with the ERROR level.
-func (l *Logger) Error(message string, args ...interface{}) {
-	l.log(message, ERROR, args...)
+// Info starts a new message with info level.
+//
+// You must call Msg on the returned event in order to send the event.
+func Info() *zerolog.Event {
+	return Logger.Info()
 }
 
-// Panic logs a formatted message with the PANIC level and calls panic.
-func (l *Logger) Panic(message string, args ...interface{}) {
-	l.log(message, PANIC, args...)
+// Warn starts a new message with warn level.
+//
+// You must call Msg on the returned event in order to send the event.
+func Warn() *zerolog.Event {
+	return Logger.Warn()
 }
 
-// Alert logs a formatted message with the ALERT level.
-func (l *Logger) Alert(message string, args ...interface{}) {
-	l.log(message, ALERT, args...)
+// Error starts a new message with error level.
+//
+// You must call Msg on the returned event in order to send the event.
+func Error() *zerolog.Event {
+	return Logger.Error()
 }
 
-// Fatal logs a formatted message with the FATAL level and exits the application with an error.
-func (l *Logger) Fatal(message string, args ...interface{}) {
-	l.log(message, FATAL, args...)
+// Fatal starts a new message with fatal level. The os.Exit(1) function
+// is called by the Msg method.
+//
+// You must call Msg on the returned event in order to send the event.
+func Fatal() *zerolog.Event {
+	return Logger.Fatal()
 }
 
-// Trace logs a formatted message with the TRACE level.
-func Trace(message string, args ...interface{}) {
-	log.Trace(message, args...)
+// Panic starts a new message with panic level. The message is also sent
+// to the panic function.
+//
+// You must call Msg on the returned event in order to send the event.
+func Panic() *zerolog.Event {
+	return Logger.Panic()
 }
 
-// Debug logs a formatted message with the DEBUG level.
-func Debug(message string, args ...interface{}) {
-	log.Debug(message, args...)
+// WithLevel starts a new message with level.
+//
+// You must call Msg on the returned event in order to send the event.
+func WithLevel(level zerolog.Level) *zerolog.Event {
+	return Logger.WithLevel(level)
 }
 
-// Info logs a formatted message with the INFO level.
-func Info(message string, args ...interface{}) {
-	log.Info(message, args...)
+// Log starts a new message with no level. Setting zerolog.GlobalLevel to
+// zerolog.Disabled will still disable events produced by this method.
+//
+// You must call Msg on the returned event in order to send the event.
+func Log() *zerolog.Event {
+	return Logger.Log()
 }
 
-// Notice logs a formatted message with the NOTICE level.
-func Notice(message string, args ...interface{}) {
-	log.Notice(message, args...)
+// Print sends a log event using debug level and no extra field.
+// Arguments are handled in the manner of fmt.Print.
+func Print(v ...interface{}) {
+	Logger.Print(v...)
 }
 
-// Warn logs a formatted message with the WARN level.
-func Warn(message string, args ...interface{}) {
-	log.Warn(message, args...)
+// Printf sends a log event using debug level and no extra field.
+// Arguments are handled in the manner of fmt.Printf.
+func Printf(format string, v ...interface{}) {
+	Logger.Printf(format, v...)
 }
 
-// Error logs a formatted message with the ERROR level.
-func Error(message string, args ...interface{}) {
-	log.Error(message, args...)
-}
-
-// Panic logs a formatted message with the PANIC level and calls panic.
-func Panic(message string, args ...interface{}) {
-	log.Panic(message, args...)
-}
-
-// Alert logs a formatted message with the ALERT level.
-func Alert(message string, args ...interface{}) {
-	log.Alert(message, args...)
-}
-
-// Fatal logs a formatted message with the FATAL level and exits the application with an error.
-func Fatal(message string, args ...interface{}) {
-	log.Fatal(message, args...)
-}
-
-//SetLevel sets the level of default Logger
-func SetLevel(lvl Level) {
-	log.SetLevel(lvl)
-}
-
-// Prefix returns the output prefix for the standard logger.
-func Prefix() string {
-	return log.Prefix()
-}
-
-// SetPrefix sets the output prefix for the standard logger.
-func SetPrefix(prefix string) {
-	log.SetPrefix(prefix)
-}
-
-// Set File creates or appends to the file path passed
-func SetFile(filePath string) error {
-	return log.SetFile(filePath)
-}
-
-// Close Log File closes the current logfile
-func CloseFile() error {
-	return log.CloseFile()
-}
-
-func line(calldepth int) string {
-	_, file, line, ok := runtime.Caller(calldepth)
-	if !ok {
-		file = "???"
-		line = 0
-	}
-
-	return fmt.Sprintf("%s:%d", path.Base(file), line)
+// Ctx returns the Logger associated with the ctx. If no logger
+// is associated, a disabled logger is returned.
+func Ctx(ctx context.Context) *zerolog.Logger {
+	return zerolog.Ctx(ctx)
 }
