@@ -6,7 +6,6 @@ require (
 	github.com/Depado/bfchroma v1.2.0
 	github.com/alecthomas/chroma v0.7.1
 	github.com/aws/aws-sdk-go v1.29.4
-	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/gosimple/slug v1.9.1-0.20191111214030-853565075b0c
 	github.com/microcosm-cc/bluemonday v1.0.2
 	github.com/nbutton23/zxcvbn-go v0.0.0-20180912185939-ae427f1e4c1d
