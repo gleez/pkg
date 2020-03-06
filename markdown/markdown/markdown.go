@@ -13,7 +13,7 @@ import (
 	"github.com/alecthomas/chroma/styles"
 	"github.com/shurcooL/sanitized_anchor_name"
 
-	"gopkg.in/russross/blackfriday.v2"
+	"github.com/russross/blackfriday/v2"
 )
 
 // Document is a parsed and HTML-rendered Markdown document.
