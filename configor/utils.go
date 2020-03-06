@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-yaml/yaml"
+	"gopkg.in/yaml.v2"
 )
 
 func (configor *Configor) getENVPrefix(config interface{}) string {
