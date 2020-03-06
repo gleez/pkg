@@ -12,6 +12,7 @@ import (
 	"github.com/Depado/bfchroma"
 	"github.com/alecthomas/chroma/styles"
 	"github.com/shurcooL/sanitized_anchor_name"
+
 	"gopkg.in/russross/blackfriday.v2"
 )
 
