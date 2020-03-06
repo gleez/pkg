@@ -13,6 +13,6 @@ func TestLog(t *testing.T) {
 	Error().Msg("error")
 
 	//these would fail the test
-	// Log.Fatal().Msg("fatal")
-	// Log.Panic().Msg("panic")
+	// Fatal().Msg("fatal")
+	// Panic().Msg("panic")
 }

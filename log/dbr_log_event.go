@@ -21,7 +21,7 @@ func (n *EventReceiver) EventKv(eventName string, kvs map[string]string) {
 
 	k := writeMapToDict(kvs)
 
-	Logger.Info().Str("svc", "dbr").
+	Clogger.Info().Str("svc", "dbr").
 		Str("method", eventName).
 		Dict("kvs", k).
 		Msg("EventEv")
@@ -30,7 +30,7 @@ func (n *EventReceiver) EventKv(eventName string, kvs map[string]string) {
 // EventErr receives a notification of an error if one occurs.
 func (n *EventReceiver) EventErr(eventName string, err error) error {
 
-	Logger.Error().Str("svc", "dbr").
+	Clogger.Error().Str("svc", "dbr").
 		Str("method", eventName).
 		Err(err).
 		Msg("EventErr")
@@ -44,7 +44,7 @@ func (n *EventReceiver) EventErrKv(eventName string, err error, kvs map[string]s
 
 	k := writeMapToDict(kvs)
 
-	Logger.Error().Str("svc", "dbr").
+	Clogger.Error().Str("svc", "dbr").
 		Str("method", eventName).
 		Dict("kvs", k).
 		Err(err).
@@ -56,7 +56,7 @@ func (n *EventReceiver) EventErrKv(eventName string, err error, kvs map[string]s
 // Timing receives the time an event took to happen.
 func (n *EventReceiver) Timing(eventName string, nanos int64) {
 
-	Logger.Info().Str("svc", "dbr").
+	Clogger.Info().Str("svc", "dbr").
 		Int64("took", nanos).
 		Str("method", eventName).
 		Str("latency", writeNanoseconds(nanos)).
@@ -68,7 +68,7 @@ func (n *EventReceiver) TimingKv(eventName string, nanos int64, kvs map[string]s
 
 	k := writeMapToDict(kvs)
 
-	Logger.Info().Str("svc", "dbr").
+	Clogger.Info().Str("svc", "dbr").
 		Int64("took", nanos).
 		Str("method", eventName).
 		Str("latency", writeNanoseconds(nanos)).
