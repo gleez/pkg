@@ -40,6 +40,15 @@ type SignedURLOptions struct {
 	//
 	// This field will always be false for non-PUT requests.
 	EnforceAbsentContentType bool
+
+	// The canned ACL to apply to the object. For more information, see Canned ACL
+	// (https://docs.aws.amazon.com/AmazonS3/latest/dev/acl-overview.html#CannedACL).
+	ACL string
+
+	// Can be used to specify caching behavior along the request/reply chain. For
+	// more information, see http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.9
+	// (http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.9).
+	CacheControl string
 }
 
 func (b *Bucket) SignedURL(ctx context.Context, key string, opts *SignedURLOptions) (string, error) {
@@ -61,6 +70,7 @@ func (b *Bucket) SignedURL(ctx context.Context, key string, opts *SignedURLOptio
 			Bucket:      aws.String(b.name),
 			Key:         aws.String(key),
 			ContentType: aws.String(opts.ContentType),
+			ACL:         aws.String(opts.ACL),
 		}
 		req, _ := b.client.PutObjectRequest(in)
 		return req.Presign(opts.Expiry)
