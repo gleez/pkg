@@ -1,6 +1,6 @@
 module github.com/gleez/pkg
 
-go 1.13
+go 1.14
 
 require (
 	github.com/Depado/bfchroma v1.2.0
