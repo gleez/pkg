@@ -57,6 +57,10 @@ func (b *Bucket) SignedURL(ctx context.Context, key string, opts *SignedURLOptio
 	}
 	key = escapeKey(key)
 
+	if opts.Expiry <= 0 {
+		opts.Expiry = 60
+	}
+
 	switch opts.Method {
 	case http.MethodGet:
 		in := &s3.GetObjectInput{
@@ -64,7 +68,7 @@ func (b *Bucket) SignedURL(ctx context.Context, key string, opts *SignedURLOptio
 			Key:    aws.String(key),
 		}
 		req, _ := b.client.GetObjectRequest(in)
-		return req.Presign(opts.Expiry)
+		return req.Presign(opts.Expiry * time.Second)
 	case http.MethodPut:
 		in := &s3.PutObjectInput{
 			Bucket:      aws.String(b.name),
@@ -73,14 +77,14 @@ func (b *Bucket) SignedURL(ctx context.Context, key string, opts *SignedURLOptio
 			ACL:         aws.String(opts.ACL),
 		}
 		req, _ := b.client.PutObjectRequest(in)
-		return req.Presign(opts.Expiry)
+		return req.Presign(opts.Expiry * time.Second)
 	case http.MethodDelete:
 		in := &s3.DeleteObjectInput{
 			Bucket: aws.String(b.name),
 			Key:    aws.String(key),
 		}
 		req, _ := b.client.DeleteObjectRequest(in)
-		return req.Presign(opts.Expiry)
+		return req.Presign(opts.Expiry * time.Second)
 	default:
 		return "", fmt.Errorf("unsupported Method %q", opts.Method)
 	}
