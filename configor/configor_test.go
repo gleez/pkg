@@ -15,14 +15,15 @@ type Anonymous struct {
 }
 
 type testConfig struct {
-	APPName string `default:"configor"`
+	APPName string `default:"configor" json:",omitempty"`
 	Hosts   []string
 
 	DB struct {
 		Name     string
 		User     string `default:"root"`
 		Password string `required:"true" env:"DBPassword"`
-		Port     uint   `default:"3306"`
+		Port     uint   `default:"3306" json:",omitempty"`
+		SSL      bool   `default:"true" json:",omitempty"`
 	}
 
 	Contacts []struct {
@@ -43,12 +44,14 @@ func generateDefaultConfig() testConfig {
 			Name     string
 			User     string `default:"root"`
 			Password string `required:"true" env:"DBPassword"`
-			Port     uint   `default:"3306"`
+			Port     uint   `default:"3306" json:",omitempty"`
+			SSL      bool   `default:"true" json:",omitempty"`
 		}{
 			Name:     "configor",
 			User:     "configor",
 			Password: "configor",
 			Port:     3306,
+			SSL:      true,
 		},
 		Contacts: []struct {
 			Name  string
@@ -88,6 +91,7 @@ func TestDefaultValue(t *testing.T) {
 	config := generateDefaultConfig()
 	config.APPName = ""
 	config.DB.Port = 0
+	config.DB.SSL = false
 
 	if bytes, err := json.Marshal(config); err == nil {
 		if file, err := ioutil.TempFile("/tmp", "configor"); err == nil {
@@ -97,6 +101,7 @@ func TestDefaultValue(t *testing.T) {
 
 			var result testConfig
 			Load(&result, file.Name())
+
 			if !reflect.DeepEqual(result, generateDefaultConfig()) {
 				t.Errorf("result should be set default value correctly")
 			}
@@ -367,6 +372,7 @@ func TestResetPrefixToBlank(t *testing.T) {
 			var defaultConfig = generateDefaultConfig()
 			defaultConfig.APPName = "config2"
 			defaultConfig.DB.Name = "db_name"
+			result.DB.User = "configor"
 			if !reflect.DeepEqual(result, defaultConfig) {
 				t.Errorf("result should equal to original configuration")
 			}
@@ -394,6 +400,7 @@ func TestResetPrefixToBlank2(t *testing.T) {
 			var defaultConfig = generateDefaultConfig()
 			defaultConfig.APPName = "config2"
 			defaultConfig.DB.Name = "db_name"
+			result.DB.User = "configor"
 			if !reflect.DeepEqual(result, defaultConfig) {
 				t.Errorf("result should equal to original configuration")
 			}
