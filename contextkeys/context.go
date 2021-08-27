@@ -8,8 +8,8 @@ type KeyString string
 
 // Added useful keys
 const (
-	Tenant = KeyString("X-Tenant-ID")
-	User   = KeyString("X-User-ID")
+	Account = KeyString("X-Account-ID")
+	User    = KeyString("X-User-ID")
 
 	TokenPointer = KeyString("tokenPointer")
 )
