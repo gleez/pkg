@@ -5,7 +5,7 @@
 // Package httplib is used as http.Client
 // Usage:
 //
-// import "github.com/gleez/app/pkg/httplib"
+// import "github.com/gleez/pkg/httplib"
 //
 //	r := httplib.Post("http://gleez.com/")
 //	r.Param("username","astaxie")
