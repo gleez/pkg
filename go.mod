@@ -15,7 +15,7 @@ require (
 	github.com/sandeepone/go-escape v0.0.0-20200309030304-f5318574cb9a
 	github.com/shurcooL/sanitized_anchor_name v1.0.0
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+	golang.org/x/crypto v0.1.0
 	golang.org/x/net v0.7.0
 	gopkg.in/yaml.v2 v2.4.0
 )
