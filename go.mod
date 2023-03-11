@@ -5,7 +5,6 @@ go 1.14
 require (
 	github.com/Depado/bfchroma v1.2.0
 	github.com/alecthomas/chroma v0.7.1
-	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
 	github.com/aws/aws-sdk-go v1.34.0
 	github.com/gosimple/slug v1.9.1-0.20191111214030-853565075b0c
 	github.com/microcosm-cc/bluemonday v1.0.18
@@ -16,7 +15,7 @@ require (
 	github.com/sandeepone/go-escape v0.0.0-20200309030304-f5318574cb9a
 	github.com/shurcooL/sanitized_anchor_name v1.0.0
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de
-	golang.org/x/net v0.0.0-20210614182718-04defd469f4e
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+	golang.org/x/net v0.7.0
 	gopkg.in/yaml.v2 v2.4.0
 )
