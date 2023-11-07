@@ -1,18 +1,18 @@
 package configor
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 func (configor *Configor) getENVPrefix(config interface{}) string {
@@ -86,7 +86,7 @@ func (configor *Configor) getConfigurationFiles(watchMode bool, files ...string)
 }
 
 func processFile(config interface{}, file string, errorOnUnmatchedKeys bool) error {
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,9 @@ func processFile(config interface{}, file string, errorOnUnmatchedKeys bool) err
 	switch {
 	case strings.HasSuffix(file, ".yaml") || strings.HasSuffix(file, ".yml"):
 		if errorOnUnmatchedKeys {
-			return yaml.UnmarshalStrict(data, config)
+			decoder := yaml.NewDecoder(bytes.NewBuffer(data))
+			decoder.KnownFields(true)
+			return decoder.Decode(config)
 		}
 		return yaml.Unmarshal(data, config)
 	case strings.HasSuffix(file, ".json"):
@@ -108,7 +110,9 @@ func processFile(config interface{}, file string, errorOnUnmatchedKeys bool) err
 
 		var yamlError error
 		if errorOnUnmatchedKeys {
-			yamlError = yaml.UnmarshalStrict(data, config)
+			decoder := yaml.NewDecoder(bytes.NewBuffer(data))
+			decoder.KnownFields(true)
+			yamlError = decoder.Decode(config)
 		} else {
 			yamlError = yaml.Unmarshal(data, config)
 		}
