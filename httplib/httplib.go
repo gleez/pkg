@@ -17,7 +17,6 @@
 //		t.Fatal(err)
 //	}
 //	fmt.Println(str)
-//
 package httplib
 
 import (
@@ -41,7 +40,7 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 var defaultCookieJar http.CookieJar
@@ -269,9 +268,9 @@ func (r *Request) SetTransport(transport http.RoundTripper) *Request {
 // example:
 //
 //	func(req *http.Request) (*url.URL, error) {
-// 		u, _ := url.ParseRequestURI("http://127.0.0.1:8118")
-// 		return u, nil
-// 	}
+//		u, _ := url.ParseRequestURI("http://127.0.0.1:8118")
+//		return u, nil
+//	}
 func (r *Request) SetProxy(proxy func(*http.Request) (*url.URL, error)) *Request {
 	r.setting.Proxy = proxy
 	return r
@@ -586,7 +585,7 @@ func (r *Request) ToFile(filename string) error {
 	return err
 }
 
-//Check that the file directory exists, there is no automatically created
+// Check that the file directory exists, there is no automatically created
 func pathExistAndMkdir(filename string) (err error) {
 	filename = path.Dir(filename)
 	_, err = os.Stat(filename)
