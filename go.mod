@@ -32,5 +32,5 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rainycape/unidecode v0.0.0-20150907023854-cb7f23ec59be // indirect
 	golang.org/x/sys v0.13.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
+	gopkg.in/yaml.v3 v3.0.0 // indirect
 )
