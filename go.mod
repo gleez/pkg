@@ -1,6 +1,6 @@
 module github.com/gleez/pkg
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/Depado/bfchroma v1.3.0
@@ -15,8 +15,8 @@ require (
 	github.com/sandeepone/go-escape v0.0.0-20200309030304-f5318574cb9a
 	github.com/shurcooL/sanitized_anchor_name v1.0.0
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/crypto v0.45.0
-	golang.org/x/net v0.47.0
+	golang.org/x/crypto v0.53.0
+	golang.org/x/net v0.55.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -30,5 +30,5 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 )
